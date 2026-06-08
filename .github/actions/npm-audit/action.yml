@@ -1,0 +1,53 @@
+name: npm Audit
+description: Run npm security audit, generate a JSON report, and upload to the central S3 reports bucket
+
+inputs:
+  working-directory:
+    description: Directory containing package.json
+    required: false
+    default: '.'
+  audit-level:
+    description: Minimum severity to fail on (low, moderate, high, critical)
+    required: false
+    default: high
+  service-name:
+    description: Service/repository name — used as the S3 key prefix
+    required: true
+  s3-reports-bucket:
+    description: S3 bucket to upload the report to
+    required: false
+    default: msi-security-scan-reports
+  aws-region:
+    description: AWS region of the S3 bucket
+    required: false
+    default: us-east-1
+
+runs:
+  using: composite
+  steps:
+    - name: npm audit
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        npm audit --json --audit-level=${{ inputs.audit-level }} \
+          > npm-audit-report.json || AUDIT_EXIT=$?
+        echo "npm audit exit: ${AUDIT_EXIT:-0}"
+        # exit 1 = vulnerabilities found at threshold — non-blocking for report mode
+        [ "${AUDIT_EXIT:-0}" -le 1 ] && exit 0 || exit ${AUDIT_EXIT}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: npm-audit-report-${{ github.run_id }}
+        path: ${{ inputs.working-directory }}/npm-audit-report.json
+
+    - name: Upload to S3
+      if: always() && inputs.s3-reports-bucket != ''
+      uses: membersolutionsinc/msi-github-actions/.github/actions/upload-scan-report@main
+      with:
+        report-path: ${{ inputs.working-directory }}/npm-audit-report.json
+        report-type: npm-audit
+        service-name: ${{ inputs.service-name }}
+        bucket: ${{ inputs.s3-reports-bucket }}
+        aws-region: ${{ inputs.aws-region }}

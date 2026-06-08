@@ -1,0 +1,36 @@
+name: NuGet Push
+description: Pack a .NET project and push to GitHub Packages NuGet feed
+
+inputs:
+  project-path:
+    description: Path to the .csproj to pack
+    required: true
+  version:
+    description: Package version (semver)
+    required: true
+  github-token:
+    description: GitHub token with packages:write permission
+    required: true
+  configuration:
+    description: Build configuration
+    required: false
+    default: Release
+
+runs:
+  using: composite
+  steps:
+    - name: Pack NuGet package
+      shell: bash
+      run: |
+        dotnet pack ${{ inputs.project-path }} \
+          --configuration ${{ inputs.configuration }} \
+          --output ./nupkg \
+          /p:PackageVersion=${{ inputs.version }}
+
+    - name: Push to GitHub Packages
+      shell: bash
+      run: |
+        dotnet nuget push ./nupkg/*.nupkg \
+          --source "https://nuget.pkg.github.com/membersolutionsinc/index.json" \
+          --api-key ${{ inputs.github-token }} \
+          --skip-duplicate

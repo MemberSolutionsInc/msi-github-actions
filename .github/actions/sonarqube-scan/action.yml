@@ -1,0 +1,28 @@
+name: SonarQube SAST Scan
+description: Run SonarQube static analysis using the official SonarQube Scanner CLI
+
+inputs:
+  sonar-project-key:
+    description: SonarQube project key (must already exist on the SonarQube server)
+    required: true
+  app-type:
+    description: Application type hint — dotnet, node, or python
+    required: false
+    default: ''
+  extra-args:
+    description: Additional sonar-scanner -D flags (space-separated)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: SonarQube scan
+      uses: sonarsource/sonarqube-scan-action@v3
+      env:
+        SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+        SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+      with:
+        args: >
+          -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+          ${{ inputs.extra-args }}

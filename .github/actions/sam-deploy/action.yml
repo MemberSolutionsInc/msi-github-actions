@@ -1,0 +1,60 @@
+name: SAM Deploy
+description: Build and deploy an AWS SAM (Serverless Application Model) application
+
+inputs:
+  stack-name:
+    description: CloudFormation stack name
+    required: true
+  s3-bucket:
+    description: S3 bucket for SAM deployment artifacts
+    required: true
+  aws-region:
+    description: AWS region
+    required: false
+    default: us-east-1
+  environment:
+    description: Deployment environment (used for parameter overrides)
+    required: true
+  parameter-overrides:
+    description: Space-separated KEY=VALUE parameter overrides
+    required: false
+    default: ''
+  python-version:
+    description: Python version for the SAM build container
+    required: false
+    default: '3.12'
+  config-file:
+    description: Path to samconfig.toml
+    required: false
+    default: samconfig.toml
+  config-env:
+    description: SAM config environment name
+    required: false
+    default: default
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Setup SAM CLI
+      uses: aws-actions/setup-sam@v2
+
+    - name: SAM build
+      shell: bash
+      run: sam build --use-container
+
+    - name: SAM deploy
+      shell: bash
+      run: |
+        sam deploy \
+          --stack-name ${{ inputs.stack-name }} \
+          --s3-bucket ${{ inputs.s3-bucket }} \
+          --region ${{ inputs.aws-region }} \
+          --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+          --no-confirm-changeset \
+          --no-fail-on-empty-changeset \
+          ${{ inputs.parameter-overrides != '' && format('--parameter-overrides {0}', inputs.parameter-overrides) || '' }}

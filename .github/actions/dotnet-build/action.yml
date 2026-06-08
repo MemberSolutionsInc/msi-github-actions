@@ -1,0 +1,42 @@
+name: .NET Build
+description: Restore, build, and publish a .NET project
+
+inputs:
+  dotnet-version:
+    description: .NET SDK version
+    required: false
+    default: '8.x'
+  project-path:
+    description: Path to solution or project file
+    required: false
+    default: '.'
+  configuration:
+    description: Build configuration
+    required: false
+    default: Release
+  publish-path:
+    description: Output path for dotnet publish
+    required: false
+    default: ./publish
+
+outputs:
+  publish-path:
+    description: Path to the published output
+    value: ${{ inputs.publish-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup .NET
+      uses: membersolutionsinc/msi-github-actions/.github/actions/setup-dotnet@main
+      with:
+        dotnet-version: ${{ inputs.dotnet-version }}
+    - name: Restore dependencies
+      shell: bash
+      run: dotnet restore ${{ inputs.project-path }}
+    - name: Build
+      shell: bash
+      run: dotnet build ${{ inputs.project-path }} --configuration ${{ inputs.configuration }} --no-restore
+    - name: Publish
+      shell: bash
+      run: dotnet publish ${{ inputs.project-path }} --configuration ${{ inputs.configuration }} --no-build --output ${{ inputs.publish-path }}

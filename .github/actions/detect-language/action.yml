@@ -1,0 +1,31 @@
+name: Detect Language
+description: Detect the primary language of a repository from file extensions
+
+outputs:
+  language:
+    description: Detected language — dotnet, node, python, java, cfml, dotnet-framework, or unknown
+    value: ${{ steps.detect.outputs.language }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect primary language
+      id: detect
+      shell: bash
+      run: |
+        if find . -name "*.csproj" -o -name "*.sln" | grep -q . 2>/dev/null; then
+          echo "language=dotnet" >> $GITHUB_OUTPUT
+        elif find . -name "*.vbproj" | grep -q . 2>/dev/null; then
+          echo "language=dotnet-framework" >> $GITHUB_OUTPUT
+        elif find . -name "package.json" -not -path "*/node_modules/*" | grep -q . 2>/dev/null; then
+          echo "language=node" >> $GITHUB_OUTPUT
+        elif find . \( -name "requirements.txt" -o -name "setup.py" -o -name "pyproject.toml" -o -name "template.yaml" \) | grep -q . 2>/dev/null; then
+          echo "language=python" >> $GITHUB_OUTPUT
+        elif find . \( -name "pom.xml" -o -name "build.gradle" \) | grep -q . 2>/dev/null; then
+          echo "language=java" >> $GITHUB_OUTPUT
+        elif find . \( -name "*.cfm" -o -name "*.cfc" \) | grep -q . 2>/dev/null; then
+          echo "language=cfml" >> $GITHUB_OUTPUT
+        else
+          echo "language=unknown" >> $GITHUB_OUTPUT
+        fi
+        echo "Detected language: $(grep '^language=' $GITHUB_OUTPUT | cut -d= -f2)"

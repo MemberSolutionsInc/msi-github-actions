@@ -1,0 +1,72 @@
+name: .NET Vulnerability Scan
+description: Run OWASP Dependency Check against NuGet packages and upload report to S3
+
+inputs:
+  project-name:
+    description: Project name for the report
+    required: true
+  scan-path:
+    description: Path to scan for dependency files
+    required: false
+    default: '.'
+  fail-cvss:
+    description: Fail if any dependency has CVSS score >= this value
+    required: false
+    default: '7'
+  dc-version:
+    description: OWASP Dependency Check version
+    required: false
+    default: '9.0.9'
+  service-name:
+    description: Service/repository name — used as the S3 key prefix
+    required: true
+  s3-reports-bucket:
+    description: S3 bucket to upload the report to
+    required: false
+    default: msi-security-scan-reports
+  aws-region:
+    description: AWS region of the S3 bucket
+    required: false
+    default: us-east-1
+
+outputs:
+  report-path:
+    description: Path to the generated reports directory
+    value: ./dependency-check-report
+
+runs:
+  using: composite
+  steps:
+    - name: Run OWASP Dependency Check
+      shell: bash
+      run: |
+        wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v${{ inputs.dc-version }}/dependency-check-${{ inputs.dc-version }}-release.zip
+        unzip -q dependency-check-${{ inputs.dc-version }}-release.zip
+        ./dependency-check/bin/dependency-check.sh \
+          --project "${{ inputs.project-name }}" \
+          --scan "${{ inputs.scan-path }}" \
+          --out ./dependency-check-report \
+          --format HTML \
+          --format JSON \
+          --failOnCVSS ${{ inputs.fail-cvss }} \
+          --enableRetired \
+          --noupdate || SCAN_EXIT=$?
+        echo "Scan exit code: ${SCAN_EXIT:-0}"
+        exit ${SCAN_EXIT:-0}
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: dependency-check-report-${{ github.run_id }}
+        path: ./dependency-check-report
+
+    - name: Upload to S3
+      if: always() && inputs.s3-reports-bucket != ''
+      uses: membersolutionsinc/msi-github-actions/.github/actions/upload-scan-report@main
+      with:
+        report-path: ./dependency-check-report
+        report-type: owasp
+        service-name: ${{ inputs.service-name }}
+        bucket: ${{ inputs.s3-reports-bucket }}
+        aws-region: ${{ inputs.aws-region }}

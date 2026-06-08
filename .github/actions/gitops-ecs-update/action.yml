@@ -1,0 +1,82 @@
+name: GitOps ECS Update
+description: Update ECS task definition image tag in terraform-infra and commit or open a PR
+
+inputs:
+  service-name:
+    description: Service name — used for the file path and PR title
+    required: true
+  environment:
+    description: Target environment (development, qa, staging, production)
+    required: true
+  image-tag:
+    description: New image tag to deploy
+    required: true
+  iac-repo:
+    description: IaC repository in org/repo format
+    required: false
+    default: membersolutionsinc/terraform-infra
+  pr-reviewers:
+    description: Comma-separated GitHub usernames for staging/prod PR review
+    required: false
+    default: agontarek,astarr,cgriffith
+  task-def-path:
+    description: Override path to task definition JSON (defaults to standard convention)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout IaC repo
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ inputs.iac-repo }}
+        token: ${{ env.GITHUB_TOKEN }}
+        path: _iac
+
+    - name: Update task definition image tag
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.task-def-path }}" ]; then
+          FILE="_iac/${{ inputs.task-def-path }}"
+        else
+          FILE="_iac/environments/${{ inputs.environment }}/${{ inputs.service-name }}/ecs/${{ inputs.service-name }}.json"
+        fi
+        if [ ! -f "$FILE" ]; then
+          echo "ERROR: Task definition not found at: $FILE"
+          exit 1
+        fi
+        jq --arg tag "${{ inputs.image-tag }}" \
+          '.containerDefinitions[0].image = $tag' \
+          "$FILE" > tmp.json && mv tmp.json "$FILE"
+        echo "Updated image tag to: ${{ inputs.image-tag }}"
+
+    - name: Commit or open PR
+      shell: bash
+      run: |
+        cd _iac
+        git config user.email "github-actions@membersolutions.com"
+        git config user.name "GitHub Actions"
+        git add .
+        if git diff --staged --quiet; then
+          echo "No changes — image tag already up to date"
+          exit 0
+        fi
+        git commit -m "deploy(${{ inputs.service-name }}): ${{ inputs.environment }} → ${{ inputs.image-tag }}"
+
+        if [[ "${{ inputs.environment }}" == "staging" || "${{ inputs.environment }}" == "production" ]]; then
+          BRANCH="deploy/${{ inputs.service-name }}-${{ inputs.environment }}-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "deploy(${{ inputs.service-name }}): ${{ inputs.environment }}" \
+            --body "Automated deployment of **${{ inputs.service-name }}** to **${{ inputs.environment }}**
+
+Image tag: \`${{ inputs.image-tag }}\`
+Triggered by: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --reviewer "${{ inputs.pr-reviewers }}"
+          echo "PR opened for ${{ inputs.environment }} deployment"
+        else
+          git push origin HEAD
+          echo "Committed directly for ${{ inputs.environment }}"
+        fi

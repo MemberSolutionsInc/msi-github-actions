@@ -1,0 +1,43 @@
+name: Node.js Build
+description: Install Node.js dependencies and build the application
+
+inputs:
+  node-version:
+    description: Node.js version to use
+    required: false
+    default: '20.x'
+  working-directory:
+    description: Directory containing package.json
+    required: false
+    default: '.'
+  build-command:
+    description: Build script to run
+    required: false
+    default: 'npm run build'
+  install-command:
+    description: Install command to use
+    required: false
+    default: 'npm ci'
+
+outputs:
+  build-path:
+    description: Path to the build output directory
+    value: ${{ inputs.working-directory }}/dist
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ${{ inputs.install-command }}
+    - name: Build
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: ${{ inputs.build-command }}

@@ -1,0 +1,87 @@
+name: ECR Push
+description: Build Docker image, create ECR repo if missing, and push with standard MSI tags
+
+inputs:
+  aws-account-id:
+    description: AWS account ID
+    required: true
+  aws-region:
+    description: AWS region
+    required: false
+    default: us-east-1
+  image-name:
+    description: ECR repository name (usually the service name)
+    required: true
+  dockerfile:
+    description: Path to Dockerfile
+    required: false
+    default: Dockerfile
+  context:
+    description: Docker build context path
+    required: false
+    default: .
+  build-args:
+    description: Docker build arguments (newline-separated KEY=VALUE pairs)
+    required: false
+    default: ''
+
+outputs:
+  image-tag:
+    description: Primary image tag in format sha_timestamp
+    value: ${{ steps.meta.outputs.image-tag }}
+  branch-tag:
+    description: Branch image tag in format branch_timestamp
+    value: ${{ steps.meta.outputs.branch-tag }}
+  full-image-uri:
+    description: Full ECR URI with primary tag
+    value: ${{ steps.meta.outputs.full-image-uri }}
+  registry:
+    description: ECR registry URL
+    value: ${{ steps.meta.outputs.registry }}
+
+runs:
+  using: composite
+  steps:
+    - name: Set image metadata
+      id: meta
+      shell: bash
+      run: |
+        TIMESTAMP=$(date +%Y%m%d%H%M%S)
+        TAG="${{ github.sha }}_${TIMESTAMP}"
+        BRANCH_SAFE=$(echo "${{ github.ref_name }}" | sed 's/[^a-zA-Z0-9._-]/-/g')
+        BRANCH_TAG="${BRANCH_SAFE}_${TIMESTAMP}"
+        REGISTRY="${{ inputs.aws-account-id }}.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com"
+        echo "image-tag=${TAG}" >> $GITHUB_OUTPUT
+        echo "branch-tag=${BRANCH_TAG}" >> $GITHUB_OUTPUT
+        echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
+        echo "full-image-uri=${REGISTRY}/${{ inputs.image-name }}:${TAG}" >> $GITHUB_OUTPUT
+
+    - name: Login to ECR
+      shell: bash
+      run: |
+        aws ecr get-login-password --region ${{ inputs.aws-region }} | \
+          docker login --username AWS --password-stdin \
+          ${{ inputs.aws-account-id }}.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com
+
+    - name: Create ECR repository if not exists
+      shell: bash
+      run: |
+        aws ecr describe-repositories \
+          --repository-names ${{ inputs.image-name }} \
+          --region ${{ inputs.aws-region }} 2>/dev/null || \
+        aws ecr create-repository \
+          --repository-name ${{ inputs.image-name }} \
+          --region ${{ inputs.aws-region }} \
+          --image-scanning-configuration scanOnPush=true \
+          --encryption-configuration encryptionType=AES256
+
+    - name: Build and push image
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.dockerfile }}
+        push: true
+        tags: |
+          ${{ steps.meta.outputs.full-image-uri }}
+          ${{ steps.meta.outputs.registry }}/${{ inputs.image-name }}:${{ steps.meta.outputs.branch-tag }}
+        build-args: ${{ inputs.build-args }}

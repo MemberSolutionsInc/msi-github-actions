@@ -1,0 +1,27 @@
+name: Secret Scan
+description: Run TruffleHog secret scanning to detect leaked credentials
+
+inputs:
+  base:
+    description: Base branch or commit to compare against
+    required: false
+    default: ${{ github.event.repository.default_branch }}
+  head:
+    description: Head branch or commit to scan
+    required: false
+    default: HEAD
+  only-verified:
+    description: Only report verified secrets
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: TruffleHog secret scan
+      uses: trufflesecurity/trufflehog@v3.63.7
+      with:
+        path: ./
+        base: ${{ inputs.base }}
+        head: ${{ inputs.head }}
+        extra_args: ${{ inputs.only-verified == 'true' && '--only-verified' || '' }}

@@ -1,0 +1,43 @@
+name: ECR Get Latest Tag
+description: Fetch the most recently pushed image tag from an ECR repository
+
+inputs:
+  aws-account-id:
+    description: AWS account ID
+    required: true
+  aws-region:
+    description: AWS region
+    required: false
+    default: us-east-1
+  image-name:
+    description: ECR repository name
+    required: true
+
+outputs:
+  image-tag:
+    description: Most recently pushed image tag
+    value: ${{ steps.get-tag.outputs.image-tag }}
+  full-image-uri:
+    description: Full ECR URI with the latest tag
+    value: ${{ steps.get-tag.outputs.full-image-uri }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get latest image tag
+      id: get-tag
+      shell: bash
+      run: |
+        REGISTRY="${{ inputs.aws-account-id }}.dkr.ecr.${{ inputs.aws-region }}.amazonaws.com"
+        TAG=$(aws ecr describe-images \
+          --repository-name ${{ inputs.image-name }} \
+          --region ${{ inputs.aws-region }} \
+          --query 'sort_by(imageDetails, &imagePushedAt)[-1].imageTags[0]' \
+          --output text)
+        if [ -z "$TAG" ] || [ "$TAG" = "None" ]; then
+          echo "ERROR: No image tags found in ${{ inputs.image-name }}"
+          exit 1
+        fi
+        echo "image-tag=${TAG}" >> $GITHUB_OUTPUT
+        echo "full-image-uri=${REGISTRY}/${{ inputs.image-name }}:${TAG}" >> $GITHUB_OUTPUT
+        echo "Latest tag: ${TAG}"

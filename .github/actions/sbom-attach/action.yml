@@ -1,0 +1,48 @@
+name: SBOM Attach
+description: Generate a Software Bill of Materials and attach it to an ECR image via ORAS
+
+inputs:
+  image-uri:
+    description: Full ECR image URI including tag (e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com/my-service:tag)
+    required: true
+  service-name:
+    description: Service name for SBOM package metadata
+    required: true
+  image-tag:
+    description: Image tag used as the SBOM package version
+    required: true
+  oras-version:
+    description: ORAS CLI version
+    required: false
+    default: '1.1.0'
+
+runs:
+  using: composite
+  steps:
+    - name: Install ORAS CLI
+      shell: bash
+      run: |
+        curl -sSLo oras.tar.gz \
+          https://github.com/oras-project/oras/releases/download/v${{ inputs.oras-version }}/oras_${{ inputs.oras-version }}_linux_amd64.tar.gz
+        sudo tar -zxf oras.tar.gz -C /usr/local/bin/ oras
+        oras version
+
+    - name: Generate SBOM
+      shell: bash
+      run: |
+        curl -sSLo sbom-tool \
+          https://github.com/microsoft/sbom-tool/releases/latest/download/sbom-tool-linux-x64
+        chmod +x sbom-tool
+        ./sbom-tool generate \
+          -b . -bc . \
+          -pn ${{ inputs.service-name }} \
+          -pv ${{ inputs.image-tag }} \
+          -ps MemberSolutions \
+          -nsb https://membersolutions.com/sbom
+
+    - name: Attach SBOM to ECR image
+      shell: bash
+      run: |
+        oras attach ${{ inputs.image-uri }} \
+          --artifact-type application/spdx+json \
+          _manifest/spdx_2.2/manifest.spdx.json

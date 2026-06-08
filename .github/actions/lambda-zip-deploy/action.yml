@@ -1,0 +1,56 @@
+name: Lambda ZIP Deploy
+description: Package source as a ZIP archive and deploy to an AWS Lambda function
+
+inputs:
+  function-name:
+    description: Lambda function name or ARN
+    required: true
+  aws-region:
+    description: AWS region
+    required: false
+    default: us-east-1
+  source-path:
+    description: Directory to zip for deployment
+    required: false
+    default: .
+  zip-name:
+    description: Output ZIP filename
+    required: false
+    default: function.zip
+  exclude-patterns:
+    description: Patterns to exclude from zip (space-separated)
+    required: false
+    default: '*.git* __pycache__/* *.pyc tests/* *.md'
+
+outputs:
+  zip-path:
+    description: Path to the generated ZIP file
+    value: ${{ steps.zip.outputs.zip-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create deployment ZIP
+      id: zip
+      shell: bash
+      run: |
+        EXCLUDE_ARGS=""
+        for pattern in ${{ inputs.exclude-patterns }}; do
+          EXCLUDE_ARGS="$EXCLUDE_ARGS -x \"$pattern\""
+        done
+        cd ${{ inputs.source-path }}
+        eval "zip -r ../${{ inputs.zip-name }} . $EXCLUDE_ARGS"
+        echo "zip-path=$(pwd)/../${{ inputs.zip-name }}" >> $GITHUB_OUTPUT
+        echo "ZIP created: $(du -sh ../${{ inputs.zip-name }} | cut -f1)"
+
+    - name: Deploy to Lambda
+      shell: bash
+      run: |
+        aws lambda update-function-code \
+          --function-name ${{ inputs.function-name }} \
+          --zip-file fileb://${{ inputs.zip-name }} \
+          --region ${{ inputs.aws-region }}
+        aws lambda wait function-updated \
+          --function-name ${{ inputs.function-name }} \
+          --region ${{ inputs.aws-region }}
+        echo "Lambda ${{ inputs.function-name }} updated successfully"

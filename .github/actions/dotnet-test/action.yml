@@ -1,0 +1,35 @@
+name: .NET Test
+description: Run .NET unit tests with code coverage collection
+
+inputs:
+  project-path:
+    description: Path to the test project or solution
+    required: false
+    default: '.'
+  configuration:
+    description: Build configuration
+    required: false
+    default: Release
+  results-directory:
+    description: Directory for test results
+    required: false
+    default: ./test-results
+
+runs:
+  using: composite
+  steps:
+    - name: Run tests
+      shell: bash
+      run: |
+        dotnet test ${{ inputs.project-path }} \
+          --configuration ${{ inputs.configuration }} \
+          --no-build \
+          --collect:"XPlat Code Coverage" \
+          --results-directory ${{ inputs.results-directory }} \
+          --logger "trx;LogFileName=test-results.trx"
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results-${{ github.run_id }}
+        path: ${{ inputs.results-directory }}

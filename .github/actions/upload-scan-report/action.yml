@@ -1,0 +1,49 @@
+name: Upload Scan Report to S3
+description: Upload a scan report to the MSI central security scan reports bucket in the audit account
+
+inputs:
+  report-path:
+    description: Local path to the report file or directory to upload
+    required: true
+  report-type:
+    description: Type of report (semgrep, owasp, sonar, npm-audit, pip-audit)
+    required: true
+  service-name:
+    description: Service/repository name — used as the top-level S3 key prefix
+    required: true
+  bucket:
+    description: S3 bucket name for scan reports
+    required: false
+    default: msi-security-scan-reports
+  aws-region:
+    description: AWS region of the S3 bucket
+    required: false
+    default: us-east-1
+
+runs:
+  using: composite
+  steps:
+    - name: Upload report to S3
+      shell: bash
+      run: |
+        YEAR=$(date -u +%Y)
+        DATE=$(date -u +%Y%m%d)
+        HHMM=$(date -u +%H%M)
+        SS=$(date -u +%S)
+        S3_PREFIX="${{ inputs.service-name }}/${YEAR}/${DATE}/${HHMM}/${SS}/${{ inputs.report-type }}"
+
+        if [ -d "${{ inputs.report-path }}" ]; then
+          aws s3 cp "${{ inputs.report-path }}/" \
+            "s3://${{ inputs.bucket }}/${S3_PREFIX}/" \
+            --recursive \
+            --region "${{ inputs.aws-region }}" \
+            --no-progress
+        else
+          FILENAME=$(basename "${{ inputs.report-path }}")
+          aws s3 cp "${{ inputs.report-path }}" \
+            "s3://${{ inputs.bucket }}/${S3_PREFIX}/${FILENAME}" \
+            --region "${{ inputs.aws-region }}" \
+            --no-progress
+        fi
+
+        echo "Report uploaded → s3://${{ inputs.bucket }}/${S3_PREFIX}/"
