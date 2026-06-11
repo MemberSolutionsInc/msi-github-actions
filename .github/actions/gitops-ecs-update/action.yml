@@ -23,6 +23,10 @@ inputs:
     description: Override path to task definition JSON (defaults to standard convention)
     required: false
     default: ''
+  vars-yaml-path:
+    description: Path to a terraform-infra vars.yaml file — when set, updates service.image tag instead of a JSON task definition
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -34,22 +38,34 @@ runs:
         token: ${{ env.GITHUB_TOKEN }}
         path: _iac
 
-    - name: Update task definition image tag
+    - name: Update image tag
       shell: bash
       run: |
-        if [ -n "${{ inputs.task-def-path }}" ]; then
-          FILE="_iac/${{ inputs.task-def-path }}"
+        if [ -n "${{ inputs.vars-yaml-path }}" ]; then
+          FILE="_iac/${{ inputs.vars-yaml-path }}"
+          if [ ! -f "$FILE" ]; then
+            echo "ERROR: vars.yaml not found at: $FILE"
+            exit 1
+          fi
+          # Replace only the tag portion of service.image (everything after the last colon)
+          TAG="${{ inputs.image-tag }}"
+          yq e ".service.image |= sub(\":[^:]+$\"; \":${TAG}\")" -i "$FILE"
+          echo "Updated service.image tag to: ${TAG}"
         else
-          FILE="_iac/environments/${{ inputs.environment }}/${{ inputs.service-name }}/ecs/${{ inputs.service-name }}.json"
+          if [ -n "${{ inputs.task-def-path }}" ]; then
+            FILE="_iac/${{ inputs.task-def-path }}"
+          else
+            FILE="_iac/environments/${{ inputs.environment }}/${{ inputs.service-name }}/ecs/${{ inputs.service-name }}.json"
+          fi
+          if [ ! -f "$FILE" ]; then
+            echo "ERROR: Task definition not found at: $FILE"
+            exit 1
+          fi
+          jq --arg tag "${{ inputs.image-tag }}" \
+            '.containerDefinitions[0].image = $tag' \
+            "$FILE" > tmp.json && mv tmp.json "$FILE"
+          echo "Updated image tag to: ${{ inputs.image-tag }}"
         fi
-        if [ ! -f "$FILE" ]; then
-          echo "ERROR: Task definition not found at: $FILE"
-          exit 1
-        fi
-        jq --arg tag "${{ inputs.image-tag }}" \
-          '.containerDefinitions[0].image = $tag' \
-          "$FILE" > tmp.json && mv tmp.json "$FILE"
-        echo "Updated image tag to: ${{ inputs.image-tag }}"
 
     - name: Commit or open PR
       shell: bash

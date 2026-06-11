@@ -18,6 +18,10 @@ inputs:
     description: Output path for dotnet publish
     required: false
     default: ./publish
+  nuget-token:
+    description: PAT for authenticating to private NuGet feeds (sets NUGET_TOKEN env var)
+    required: false
+    default: ''
 
 outputs:
   publish-path:
@@ -34,6 +38,8 @@ runs:
     - name: Restore dependencies
       shell: bash
       run: dotnet restore ${{ inputs.project-path }}
+      env:
+        NUGET_TOKEN: ${{ inputs.nuget-token }}
     - name: Build
       shell: bash
       run: dotnet build ${{ inputs.project-path }} --configuration ${{ inputs.configuration }} --no-restore
