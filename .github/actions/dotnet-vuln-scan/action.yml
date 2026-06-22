@@ -59,7 +59,7 @@ runs:
         unzip -q dependency-check-${{ inputs.dc-version }}-release.zip
         NVD_FLAG=""
         if [ -n "$NVD_API_KEY" ]; then
-          NVD_FLAG="--nvdApiKey $NVD_API_KEY"
+          NVD_FLAG="--nvdApiKey $NVD_API_KEY --nvdApiDelay 2000 --nvdMaxRetryCount 5"
         fi
         ./dependency-check/bin/dependency-check.sh \
           --project "${{ inputs.project-name }}" \
