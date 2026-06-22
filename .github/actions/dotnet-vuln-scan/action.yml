@@ -28,6 +28,10 @@ inputs:
     description: AWS region of the S3 bucket
     required: false
     default: us-east-1
+  nvd-api-key:
+    description: NVD API key for fetching the vulnerability database (required for DependencyCheck v9+). Get a free key at https://nvd.nist.gov/developers/request-an-api-key
+    required: false
+    default: ''
 
 outputs:
   report-path:
@@ -48,9 +52,15 @@ runs:
 
     - name: Run OWASP Dependency Check
       shell: bash
+      env:
+        NVD_API_KEY: ${{ inputs.nvd-api-key }}
       run: |
         wget -q https://github.com/jeremylong/DependencyCheck/releases/download/v${{ inputs.dc-version }}/dependency-check-${{ inputs.dc-version }}-release.zip
         unzip -q dependency-check-${{ inputs.dc-version }}-release.zip
+        NVD_FLAG=""
+        if [ -n "$NVD_API_KEY" ]; then
+          NVD_FLAG="--nvdApiKey $NVD_API_KEY"
+        fi
         ./dependency-check/bin/dependency-check.sh \
           --project "${{ inputs.project-name }}" \
           --scan "${{ inputs.scan-path }}" \
@@ -59,7 +69,8 @@ runs:
           --format JSON \
           --failOnCVSS ${{ inputs.fail-cvss }} \
           --enableRetired \
-          --data ~/.m2/repository/org/owasp/dependency-check-data || SCAN_EXIT=$?
+          --data ~/.m2/repository/org/owasp/dependency-check-data \
+          $NVD_FLAG || SCAN_EXIT=$?
         echo "Scan exit code: ${SCAN_EXIT:-0}"
         exit ${SCAN_EXIT:-0}
 
