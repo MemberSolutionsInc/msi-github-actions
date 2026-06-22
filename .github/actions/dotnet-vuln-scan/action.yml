@@ -72,6 +72,10 @@ runs:
           --data ~/.m2/repository/org/owasp/dependency-check-data \
           $NVD_FLAG || SCAN_EXIT=$?
         echo "Scan exit code: ${SCAN_EXIT:-0}"
+        if [ "${SCAN_EXIT:-0}" -eq 13 ]; then
+          echo "::warning::OWASP Dependency Check could not reach the NVD database (exit 13). Scan skipped — no CVE blocking this run. Verify NVD API key is active."
+          exit 0
+        fi
         exit ${SCAN_EXIT:-0}
 
     - name: Upload artifact
