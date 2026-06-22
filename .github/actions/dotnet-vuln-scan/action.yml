@@ -37,6 +37,15 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Cache NVD database
+      uses: actions/cache@v4
+      with:
+        path: ~/.m2/repository/org/owasp/dependency-check-data
+        key: owasp-nvd-${{ runner.os }}-${{ inputs.dc-version }}-${{ hashFiles('**/packages.lock.json') }}-${{ github.run_id }}
+        restore-keys: |
+          owasp-nvd-${{ runner.os }}-${{ inputs.dc-version }}-
+          owasp-nvd-${{ runner.os }}-
+
     - name: Run OWASP Dependency Check
       shell: bash
       run: |
@@ -50,7 +59,7 @@ runs:
           --format JSON \
           --failOnCVSS ${{ inputs.fail-cvss }} \
           --enableRetired \
-          --noupdate || SCAN_EXIT=$?
+          --data ~/.m2/repository/org/owasp/dependency-check-data || SCAN_EXIT=$?
         echo "Scan exit code: ${SCAN_EXIT:-0}"
         exit ${SCAN_EXIT:-0}
 
