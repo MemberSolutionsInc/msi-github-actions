@@ -14,7 +14,7 @@ inputs:
   iac-repo:
     description: IaC repository in org/repo format
     required: false
-    default: membersolutionsinc/terraform-infra
+    default: MemberSolutionsInc/Multicloud-MS-Terraform
   pr-reviewers:
     description: Comma-separated GitHub usernames for staging/prod PR review
     required: false
