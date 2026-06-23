@@ -14,6 +14,14 @@ inputs:
     description: Directory for test results
     required: false
     default: ./test-results
+  filter:
+    description: Test filter expression passed to --filter (e.g. "Category!=Integration"). Leave empty to run all tests.
+    required: false
+    default: ''
+  timeout:
+    description: Per-test timeout in minutes passed to --blame-hang-timeout
+    required: false
+    default: '5'
 
 runs:
   using: composite
@@ -21,12 +29,18 @@ runs:
     - name: Run tests
       shell: bash
       run: |
+        FILTER_ARG=""
+        if [ -n "${{ inputs.filter }}" ]; then
+          FILTER_ARG="--filter ${{ inputs.filter }}"
+        fi
         dotnet test ${{ inputs.project-path }} \
           --configuration ${{ inputs.configuration }} \
           --no-build \
           --collect:"XPlat Code Coverage" \
           --results-directory ${{ inputs.results-directory }} \
-          --logger "trx;LogFileName=test-results.trx"
+          --logger "trx;LogFileName=test-results.trx" \
+          --blame-hang-timeout ${{ inputs.timeout }}m \
+          $FILTER_ARG
     - name: Upload test results
       uses: actions/upload-artifact@v4
       if: always()
