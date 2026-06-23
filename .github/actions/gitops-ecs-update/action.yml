@@ -86,10 +86,7 @@ runs:
           git push origin "$BRANCH"
           gh pr create \
             --title "deploy(${{ inputs.service-name }}): ${{ inputs.environment }}" \
-            --body "Automated deployment of **${{ inputs.service-name }}** to **${{ inputs.environment }}**
-
-Image tag: \`${{ inputs.image-tag }}\`
-Triggered by: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --body "$(printf 'Automated deployment of **${{ inputs.service-name }}** to **${{ inputs.environment }}**\n\nImage tag: `${{ inputs.image-tag }}`\nTriggered by: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}')" \
             --reviewer "${{ inputs.pr-reviewers }}"
           echo "PR opened for ${{ inputs.environment }} deployment"
         else
